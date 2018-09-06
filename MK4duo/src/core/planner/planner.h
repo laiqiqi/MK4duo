@@ -41,9 +41,6 @@ enum BlockFlagBit {
   // from a safe speed (in consideration of jerking from zero speed).
   BLOCK_BIT_NOMINAL_LENGTH,
 
-  // The block is busy, being interpreted by the stepper ISR
-  BLOCK_BIT_BUSY,
-
   // Sync the stepper counts from the block
   BLOCK_BIT_SYNC_POSITION
 };
@@ -51,7 +48,6 @@ enum BlockFlagBit {
 enum BlockFlag : char {
   BLOCK_FLAG_RECALCULATE          = _BV(BLOCK_BIT_RECALCULATE),
   BLOCK_FLAG_NOMINAL_LENGTH       = _BV(BLOCK_BIT_NOMINAL_LENGTH),
-  BLOCK_FLAG_BUSY                 = _BV(BLOCK_BIT_BUSY),
   BLOCK_FLAG_SYNC_POSITION        = _BV(BLOCK_BIT_SYNC_POSITION)
 };
 
@@ -66,7 +62,7 @@ enum BlockFlag : char {
  */
 typedef struct {
 
-  uint8_t flag;                             // Block flags (See BlockFlag enum above)
+  volatile uint8_t flag;                    // Block flags (See BlockFlag enum above) - Modified by ISR and main thread!
 
   // Fields used by the motion planner to manage acceleration
   float nominal_speed_sqr,                  // The nominal speed for this block in (mm/sec)^2
@@ -105,7 +101,7 @@ typedef struct {
     uint32_t  acceleration_rate;            // The acceleration rate used for acceleration calculation
   #endif
 
-  uint8_t direction_bits;                   // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
+  uint8_t direction_bits;                   // The direction bit set for this block
 
   // Advance extrusion
   #if ENABLED(LIN_ADVANCE)
@@ -167,19 +163,28 @@ class Planner {
      */
     static block_t          block_buffer[BLOCK_BUFFER_SIZE];
     static volatile uint8_t block_buffer_head,        // Index of the next block to be pushed
+                            block_buffer_nonbusy,     // Index of the first non busy block
+                            block_buffer_planned,     // Index of the optimally planned block
                             block_buffer_tail;        // Index of the busy block, if any
-    static uint8_t          block_buffer_planned,     // Index of the optimally planned block
-                            delay_before_delivering;  // This counter delays delivery of blocks when queue becomes empty to allow the opportunity of merging blocks
+    static uint8_t          delay_before_delivering;  // This counter delays delivery of blocks when queue becomes empty to allow the opportunity of merging blocks
 
     static bool cleaning_buffer_flag;                 // A flag to disable queuing of blocks
 
     #if ENABLED(LIN_ADVANCE)
-      static float  extruder_advance_K,
-                    position_float[XYZE];
+      static float  extruder_advance_K;
+    #endif
+
+    #if HAS_POSITION_FLOAT
+      static float  position_float[XYZE];
     #endif
 
     #if ENABLED(ABORT_ON_ENDSTOP_HIT)
       static bool abort_on_endstop_hit;
+    #endif
+
+    #if ENABLED(HYSTERESIS_FEATURE)
+      static float  hysteresis_mm[XYZ],
+                    hysteresis_correction;
     #endif
 
   private: /** Private Parameters */
@@ -216,7 +221,7 @@ class Planner {
       // Used for the frequency limit
       #define MAX_FREQ_TIME_US (uint32_t)(1000000.0 / XY_FREQUENCY_LIMIT)
       // Old direction bits. Used for speed calculations
-      static unsigned char old_direction_bits;
+      static uint8_t old_direction_bits;
       // Segment times (in µs). Used for speed calculations
       static uint32_t axis_segment_time_us[2][3];
     #endif
@@ -236,9 +241,19 @@ class Planner {
     static void check_axes_activity();
 
     /**
-     * Number of moves currently in the planner
+     * Number of moves currently in the planner including the busy block, if any
      */
     FORCE_INLINE static uint8_t movesplanned() { return BLOCK_MOD(block_buffer_head - block_buffer_tail); }
+
+    /**
+     * Number of nonbusy moves currently in the planner
+     */
+    FORCE_INLINE static uint8_t nonbusy_movesplanned() { return BLOCK_MOD(block_buffer_head - block_buffer_nonbusy); }
+
+    /**
+     * Remove all blocks from the buffer
+     */
+    FORCE_INLINE static void clear_block_buffer() { block_buffer_nonbusy = block_buffer_planned = block_buffer_head = block_buffer_tail = 0; }
 
     /**
      * Check if movement queue is full
@@ -279,7 +294,7 @@ class Planner {
      * Return true if movement was buffered, false otherwise
      */
     static bool buffer_steps(const int32_t (&target)[XYZE]
-      #if ENABLED(LIN_ADVANCE)
+      #if HAS_POSITION_FLOAT
         , const float (&target_float)[XYZE]
       #endif
       , float fr_mm_s, const uint8_t extruder, const float &millimeters=0.0
@@ -299,7 +314,7 @@ class Planner {
      */
     static bool fill_block(block_t * const block, bool split_move,
         const int32_t (&target)[XYZE]
-      #if ENABLED(LIN_ADVANCE)
+      #if HAS_POSITION_FLOAT
         , const float (&target_float)[XYZE]
       #endif
       , float fr_mm_s, const uint8_t extruder, const float &millimeters=0.0
@@ -418,14 +433,8 @@ class Planner {
      * NB: There MUST be a current block to call this function!!
      */
     FORCE_INLINE static void discard_current_block() {
-      if (has_blocks_queued()) { // Discard non-empty buffer.
-        uint8_t block_index = next_block_index(block_buffer_tail);
-
-        // Push block_buffer_planned pointer, if encountered.
-        if (!has_blocks_queued()) block_buffer_planned = block_index;
-
-        block_buffer_tail = block_index;
-      }
+      if (has_blocks_queued())
+        block_buffer_tail = next_block_index(block_buffer_tail);
     }
 
     /**
@@ -436,7 +445,7 @@ class Planner {
     static block_t* get_current_block() {
 
       // Get the number of moves in the planner queue so far
-      uint8_t nr_moves = movesplanned();
+      const uint8_t nr_moves = movesplanned();
 
       // If there are any moves queued ...
       if (nr_moves) {
@@ -460,8 +469,14 @@ class Planner {
           block_buffer_runtime_us -= block->segment_time_us; // We can't be sure how long an active block will take, so don't count it.
         #endif
 
-        // Mark the block as busy, so the planner does not attempt to replan it
-        SBI(block->flag, BLOCK_BIT_BUSY);
+        // As this block is busy, advance the nonbusy block pointer
+        block_buffer_nonbusy = next_block_index(block_buffer_tail);
+
+        // Push block_buffer_planned pointer, if encountered.
+        if (block_buffer_tail == block_buffer_planned)
+          block_buffer_planned = block_buffer_nonbusy;
+
+        // Return the block
         return block;
       }
 
@@ -584,30 +599,27 @@ class Planner {
 
     #if ENABLED(JUNCTION_DEVIATION)
 
-      #if ENABLED(JUNCTION_DEVIATION_INCLUDE_E)
-        #define JD_AXES XYZE
-      #else
-        #define JD_AXES XYZ
-      #endif
-
-      FORCE_INLINE static void normalize_junction_vector(float (&vector)[JD_AXES]) {
+      FORCE_INLINE static void normalize_junction_vector(float (&vector)[XYZE]) {
         float magnitude_sq = 0.0;
-        for (uint8_t idx = 0; idx < JD_AXES; idx++) if (vector[idx]) magnitude_sq += sq(vector[idx]);
+        LOOP_XYZE(idx) if (vector[idx]) magnitude_sq += sq(vector[idx]);
         const float inv_magnitude = 1.0 / SQRT(magnitude_sq);
-        for (uint8_t idx = 0; idx < JD_AXES; idx++) vector[idx] *= inv_magnitude;
+        LOOP_XYZE(idx) vector[idx] *= inv_magnitude;
       }
 
-      FORCE_INLINE static float limit_value_by_axis_maximum(const float &max_value, float (&unit_vec)[JD_AXES]) {
+      FORCE_INLINE static float limit_value_by_axis_maximum(const float &max_value, float (&unit_vec)[XYZE]) {
         float limit_value = max_value;
-        for (uint8_t idx = 0; idx < JD_AXES; idx++) {
-          if (unit_vec[idx]) { // Avoid divide by zero
+        LOOP_XYZE(idx) {
+          if (unit_vec[idx]) // Avoid divide by zero
             NOMORE(limit_value, ABS(mechanics.max_acceleration_mm_per_s2[idx] / unit_vec[idx]));
-          }
         }
         return limit_value;
       }
 
     #endif // JUNCTION_DEVIATION
+
+    #if ENABLED(HYSTERESIS_FEATURE)
+      static void insert_hysteresis_correction(const int32_t dx, const int32_t dy, const int32_t dz, block_t * block, float delta_mm[]);
+    #endif
 
 };
 

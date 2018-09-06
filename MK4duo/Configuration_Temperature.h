@@ -48,7 +48,7 @@
  ******************************** Temperature Units Support *************************
  ************************************************************************************
  *                                                                                  *
- * Enable TEMPERATURE UNITS SUPPORT for change unit width command Gcode M149        *
+ * Enable TEMPERATURE UNITS SUPPORT for change unit with command Gcode M149         *
  *                                                                                  *
  ************************************************************************************/
 //#define TEMPERATURE_UNITS_SUPPORT
@@ -59,10 +59,11 @@
  ************************************** Thermistor type **********************************************
  *****************************************************************************************************
  *                                                                                                   *
- * Please choose the one that matches your setup and set to TEMP_SENSOR_.                            *
+ * Please choose the one that matches your setup and set to TEMP SENSOR.                             *
  *                                                                                                   *
- *  -3 is thermocouple with MAX31855 (only Hotends)                                                  *
- *  -2 is thermocouple with MAX6675 (only Hotends)                                                   *
+ *  -4 is thermocouple with MAX31855 (only Hotends)                                                  *
+ *  -3 is thermocouple with MAX6675 (only Hotends)                                                   *
+ *  -2 is thermocouple with AD8495                                                                   *
  *  -1 is thermocouple with AD595 or AD597                                                           *
  *   0 is not used                                                                                   *
  *   1 is 100k thermistor - best choice for EPCOS 100k (4.7k pullup)                                 *

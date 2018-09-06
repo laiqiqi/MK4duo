@@ -1,7 +1,7 @@
 /****************************************************************************************
 * 1414
-* Arduino pin assignment
-* for BOARD_RAMPS_SMART_HHF
+*
+* RAMPS SMART HHF
 ****************************************************************************************/
 
 //###CHIP
@@ -163,7 +163,7 @@
 // I2C EEPROM with 4K of space
 #define EEPROM_I2C
 #define E2END 0xFFF
-#define MAX6675_SS_PIN            66 // Do not use pin 49 as this is tied to the switch inside the SD card socket to detect if there is an SD card present
+#define MAX6675_SS_PIN             66
 //@@@
 
 //###IF_BLOCKS
@@ -322,3 +322,4 @@
 
 #endif // ULTRA_LCD
 //@@@
+

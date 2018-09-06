@@ -35,8 +35,8 @@
    *
    *  E[distance] - Retract the filament this far
    *  Z[distance] - Move the Z axis by this distance
-   *  X[position] - Move to this X position, with Y
-   *  Y[position] - Move to this Y position, with X
+   *  X[position] - Move to this X position
+   *  Y[position] - Move to this Y position
    *  U[distance] - Retract distance for removal (manual reload)
    *  L[distance] - Extrude distance for insertion (manual reload)
    *  S[temp]     - New temperature for new filament
@@ -70,7 +70,7 @@
     #endif
 
     // Initial retract before move to pause park position
-    const float retract = ABS(parser.seen('E') ? parser.value_axis_units(E_AXIS) : 0)
+    const float retract = -ABS(parser.seen('E') ? parser.value_axis_units(E_AXIS) : 0)
       #if ENABLED(PAUSE_PARK_RETRACT_LENGTH) && PAUSE_PARK_RETRACT_LENGTH > 0
         + (PAUSE_PARK_RETRACT_LENGTH)
       #endif
@@ -89,7 +89,7 @@
     #endif
 
     // Unload filament
-    const float unload_length = ABS(parser.seen('U') ? parser.value_axis_units(E_AXIS)
+    const float unload_length = -ABS(parser.seen('U') ? parser.value_axis_units(E_AXIS)
                                                        : filament_change_unload_length[tools.active_extruder]);
 
     // Slow load filament
@@ -99,8 +99,7 @@
     const float fast_load_length = ABS(parser.seen('L') ? parser.value_axis_units(E_AXIS)
                                                           : filament_change_load_length[tools.active_extruder]);
 
-    int16_t temp = 0;
-    if (parser.seenval('S')) temp = parser.value_celsius();
+    if (parser.seenval('S')) heaters[ACTIVE_HOTEND].setTarget(parser.value_celsius());
 
     const int beep_count = parser.intval('B',
       #if ENABLED(PAUSE_PARK_NUMBER_OF_ALERT_BEEPS)
@@ -112,7 +111,7 @@
 
     const bool job_running = print_job_counter.isRunning();
 
-    if (pause_print(retract, park_point, unload_length, temp, true)) {
+    if (pause_print(retract, park_point, unload_length, true)) {
       wait_for_filament_reload(beep_count);
       resume_print(slow_load_length, fast_load_length, PAUSE_PARK_EXTRUDE_LENGTH, beep_count);
     }

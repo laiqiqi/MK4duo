@@ -514,7 +514,7 @@ void Commands::get_destination() {
       mechanics.destination[i] = mechanics.current_position[i];
   }
 
-  if (parser.linearval('F') > 0.0)
+  if (parser.linearval('F') > 0)
     mechanics.feedrate_mm_s = MMM_TO_MMS(parser.value_feedrate());
 
   if (parser.seen('P'))
@@ -568,29 +568,33 @@ bool Commands::get_target_tool(const uint16_t code) {
   return false;
 }
 
-bool Commands::get_target_heater(int8_t &h) {
-
+bool Commands::get_target_heater(int8_t &h, const bool only_hotend/*=false*/) {
+  h = parser.seen('H') ? parser.value_int() : 0;
   if (WITHIN(h, 0 , HOTENDS -1)) return true;
-  #if HAS_HEATER_BED
-    else if (h == -1) {
-      h = BED_INDEX;
-      return true;
-    }
-  #endif
-  #if HAS_HEATER_CHAMBER
-    else if (h == -2) {
-      h = CHAMBER_INDEX;
-      return true;
-    }
-  #endif
-  #if HAS_HEATER_COOLER
-    else if (h == -3) {
-      h = COOLER_INDEX;
-      return true;
-    }
-  #endif
-  else {
+  if (!only_hotend) {
+    #if HAS_HEATER_BED
+      if (h == -1) {
+        h = BED_INDEX;
+        return true;
+      }
+    #endif
+    #if HAS_HEATER_CHAMBER
+      if (h == -2) {
+        h = CHAMBER_INDEX;
+        return true;
+      }
+    #endif
+    #if HAS_HEATER_COOLER
+      if (h == -3) {
+        h = COOLER_INDEX;
+        return true;
+      }
+    #endif
     SERIAL_LM(ER, MSG_INVALID_HEATER);
+    return false;
+  }
+  else {
+    SERIAL_LM(ER, MSG_INVALID_HOTEND);
     return false;
   }
 }
@@ -655,12 +659,17 @@ void Commands::gcode_line_error(const char* err) {
  * Enqueue with Serial Echo
  */
 bool Commands::enqueue_and_echo(const char* cmd) {
+
+  if (*cmd == 0 || *cmd == '\n' || *cmd == '\r')
+    return true;
+
   if (enqueue(cmd)) {
     SERIAL_SMT(ECHO, MSG_ENQUEUEING, cmd);
     SERIAL_CHR('"');
     SERIAL_EOL();
     return true;
   }
+
   return false;
 }
 
@@ -685,11 +694,11 @@ bool Commands::drain_injected_P() {
 #if HAS_SD_RESTART
 
   bool Commands::enqueue_restart() {
-    static uint8_t index = 0;
-    if (restart.count > 0) {
-      if (enqueue(restart.buffer_ring[index])) {
-        index++;
-        restart.count--;
+    static uint8_t restart_commands_index = 0;
+    if (restart.count) {
+      if (enqueue(restart.buffer_ring[restart_commands_index])) {
+        ++restart_commands_index;
+        if (!--restart.count) restart.job_phase = RESTART_DONE;
       }
       return true;
     }

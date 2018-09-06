@@ -189,7 +189,10 @@ void Temperature::wait_heater(Heater *act, bool no_wait_for_cooling/*=true*/) {
 void Temperature::set_current_temp_raw() {
 
   #if ANALOG_INPUTS > 0
-    LOOP_HEATER() heaters[h].sensor.raw = HAL::AnalogInputValues[heaters[h].sensor.pin];
+    LOOP_HEATER() {
+      if (WITHIN(heaters[h].sensor.pin, 0, 15))
+        heaters[h].sensor.raw = HAL::AnalogInputValues[heaters[h].sensor.pin];
+    }
   #endif
 
   #if HAS_POWER_CONSUMPTION_SENSOR
@@ -206,18 +209,14 @@ void Temperature::set_current_temp_raw() {
  * Spin Manage heating activities for heaters, bed, chamber and cooler
  *  - Is called every 100ms.
  *  - Acquire updated temperature readings
- *    - Also resets the watchdog timer
+ *  - Also resets the watchdog timer
  *  - Invoke thermal runaway protection
  *  - Apply filament width to the extrusion rate (may move)
  *  - Update the heated bed PID output value
  */
 void Temperature::spin() {
 
-  static uint8_t cycle_1_second = 0;
-
-  if (++cycle_1_second == 10) cycle_1_second = 0;
-
-  millis_t ms = millis();
+  millis_t now = millis();
 
   #if ENABLED(EMERGENCY_PARSER)
     if (emergency_parser.killed_by_M112) printer.kill(PSTR(MSG_KILLED));
@@ -230,23 +229,23 @@ void Temperature::spin() {
     // Update Current Temperature
     act->updateCurrentTemperature();
 
-    if (act->isON() && act->current_temperature > act->maxtemp) max_temp_error(act->ID);
-    if (act->isON() && act->current_temperature < act->mintemp) min_temp_error(act->ID);
+    if (act->isActive() && act->current_temperature > act->maxtemp) max_temp_error(act->ID);
+    if (act->isActive() && act->current_temperature < act->mintemp) min_temp_error(act->ID);
 
     // Check for thermal runaway
     #if HAS_THERMALLY_PROTECTED_HEATER
       if (thermal_protection[act->type])
-        thermal_runaway_protection(&thermal_runaway_state_machine[h], &thermal_runaway_timer[h], act->current_temperature, act->target_temperature, h, THERMAL_PROTECTION_PERIOD, THERMAL_PROTECTION_HYSTERESIS);
+        thermal_runaway_protection(&thermal_runaway_state_machine[h], &thermal_runaway_timer[h], h, THERMAL_PROTECTION_PERIOD, THERMAL_PROTECTION_HYSTERESIS);
     #endif
 
     // Ignore heater we are currently testing
     if (pid_pointer == act->ID) continue;
 
-    act->get_pid_output(cycle_1_second == 0);
+    act->get_pid_output();
 
     #if WATCH_THE_HEATER
       // Make sure temperature is increasing
-      if (act->watch_next_ms && ELAPSED(ms, act->watch_next_ms)) {
+      if (act->watch_next_ms && ELAPSED(now, act->watch_next_ms)) {
         if (act->current_temperature < act->watch_target_temp)
           _temp_error(h, PSTR(MSG_T_HEATING_FAILED), PSTR(MSG_HEATING_FAILED_LCD));
         else
@@ -275,12 +274,12 @@ void Temperature::spin() {
       // Convert the ratio value given by the filament width sensor
       // into a volumetric multiplier. Conversion differs when using
       // linear extrusion vs volumetric extrusion.
-      const float nom_meas_ratio = 1.0 + 0.01 * measurement_delay[meas_shift_index],
+      const float nom_meas_ratio = 1.0 + 0.01f * measurement_delay[meas_shift_index],
                   ratio_2 = sq(nom_meas_ratio);
 
       tools.volumetric_multiplier[FILAMENT_SENSOR_EXTRUDER_NUM] = printer.isVolumetric()
-        ? ratio_2 / CIRCLE_AREA(filament_width_nominal * 0.5) // Volumetric uses a true volumetric multiplier
-        : ratio_2;                                            // Linear squares the ratio, which scales the volume
+        ? ratio_2 / CIRCLE_AREA(filament_width_nominal * 0.5f)  // Volumetric uses a true volumetric multiplier
+        : ratio_2;                                              // Linear squares the ratio, which scales the volume
 
       tools.refresh_e_factor(FILAMENT_SENSOR_EXTRUDER_NUM);
     }
@@ -580,14 +579,32 @@ void Temperature::disable_all_heaters() {
 }
 
 /**
- * Check if there are heaters on
+ * Check if there are heaters Active
  */
-bool Temperature::heaters_isON() {
+bool Temperature::heaters_isActive() {
   #if HEATER_COUNT > 0
-    LOOP_HEATER() if (heaters[h].isON()) return true;
+    LOOP_HEATER() if (heaters[h].isActive()) return true;
   #endif
   return false;
 }
+
+#if ENABLED(SUPPORT_MAX6675) || ENABLED(SUPPORT_MAX31855)
+
+  void Temperature::getTemperature_SPI() {
+    LOOP_HEATER() {
+      Heater *act = &heaters[h];
+      #if ENABLED(SUPPORT_MAX31855)
+        if (act->sensor.type == -4)
+          act->sensor.raw = act->sensor.read_max31855();
+      #endif
+      #if ENABLED(SUPPORT_MAX6675)
+        if (act->sensor.type == -3)
+          act->sensor.raw = act->sensor.read_max6675();
+      #endif
+    }
+  }
+
+#endif
 
 #if ENABLED(FILAMENT_SENSOR)
 
@@ -682,7 +699,7 @@ void Temperature::report_temperatures(const bool showRaw/*=false*/) {
 
 // Temperature Error Handlers
 void Temperature::_temp_error(const uint8_t h, const char * const serial_msg, const char * const lcd_msg) {
-  if (!heaters[h].isIdle()) {
+  if (heaters[h].isActive()) {
     SERIAL_STR(ER);
     SERIAL_PS(serial_msg);
     SERIAL_MSG(MSG_STOPPED_HEATER);
@@ -710,7 +727,7 @@ void Temperature::_temp_error(const uint8_t h, const char * const serial_msg, co
   }
 
   lcd_setstatusPGM(lcd_msg);
-  heaters[h].setIdle(true);
+  heaters[h].setFault();
 
 }
 void Temperature::min_temp_error(const uint8_t h) {
@@ -755,9 +772,11 @@ void Temperature::max_temp_error(const uint8_t h) {
   Temperature::TRState Temperature::thermal_runaway_state_machine[HEATER_COUNT] = { TRInactive };
   millis_t Temperature::thermal_runaway_timer[HEATER_COUNT] = { 0 };
 
-  void Temperature::thermal_runaway_protection(Temperature::TRState* state, millis_t* timer, float temperature, float target_temperature, const uint8_t h, int period_seconds, int hysteresis_degc) {
+  void Temperature::thermal_runaway_protection(Temperature::TRState* state, millis_t* timer, const uint8_t h, int period_seconds, int hysteresis_degc) {
 
     static float tr_target_temperature[HEATER_COUNT] = { 0.0 };
+
+    Heater *act = &heaters[h];
 
     /*
         SERIAL_MSG("Thermal Thermal Runaway Running. Heater ID: ");
@@ -767,19 +786,16 @@ void Temperature::max_temp_error(const uint8_t h) {
         SERIAL_MV(" ;  Temperature:", temperature);
         SERIAL_EMV(" ;  Target Temp:", target_temperature);
     */
-   
-    #if HEATER_IDLE_HANDLER
-      // If the heater idle timeout expires, restart
-      if (heaters[h].isIdle()) {
-        *state = TRInactive;
-        tr_target_temperature[h] = 0;
-      }
-      else
-    #endif
+
+    // If the heater idle timeout expires, restart
+    if (act->isIdle()) {
+      *state = TRInactive;
+      tr_target_temperature[h] = act->idle_temperature;
+    }
     // If the target temperature changes, restart
-    if (tr_target_temperature[h] != target_temperature) {
-      tr_target_temperature[h] = target_temperature;
-      *state = target_temperature > 0 ? TRFirstHeating : TRInactive;
+    else if (tr_target_temperature[h] != act->target_temperature) {
+      tr_target_temperature[h] = act->target_temperature;
+      *state = tr_target_temperature[h] > 0 ? TRFirstHeating : TRInactive;
     }
 
     switch (*state) {
@@ -787,11 +803,11 @@ void Temperature::max_temp_error(const uint8_t h) {
       case TRInactive: break;
       // When first heating, wait for the temperature to be reached then go to Stable state
       case TRFirstHeating:
-        if (temperature < tr_target_temperature[h]) break;
+        if (act->current_temperature < tr_target_temperature[h]) break;
         *state = TRStable;
       // While the temperature is stable watch for a bad temperature
       case TRStable:
-        if (temperature >= tr_target_temperature[h] - hysteresis_degc) {
+        if (act->current_temperature >= tr_target_temperature[h] - hysteresis_degc) {
           *timer = millis() + period_seconds * 1000UL;
           break;
         }
@@ -831,9 +847,10 @@ void Temperature::print_heater_state(Heater *act, const bool print_ID, const boo
     if (act->type == IS_COOLER) SERIAL_CHR('C');
   #endif
 
+  const int16_t targetTemperature = act->isIdle() ? act->idle_temperature : act->target_temperature;
   SERIAL_CHR(':');
   SERIAL_VAL(act->current_temperature, 2);
-  SERIAL_MV(" /" , act->target_temperature);
+  SERIAL_MV(" /" , targetTemperature);
   if (showRaw) {
     SERIAL_MV(" (", act->sensor.raw);
     SERIAL_CHR(')');

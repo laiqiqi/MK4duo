@@ -31,9 +31,11 @@
 
 #if HAS_TRINAMIC
 
-  #if ENABLED(HAVE_TMC2130)
+  #if HAVE_DRV(TMC2130)
     #include <TMC2130Stepper.h>
-  #elif ENABLED(HAVE_TMC2208)
+  #endif
+
+  #if HAVE_DRV(TMC2208)
     #include <TMC2208Stepper.h>
   #endif
 

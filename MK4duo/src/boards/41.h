@@ -159,7 +159,7 @@
 
 
 //###UNKNOWN_PINS
-#define MAX6675_SS_PIN            58 // Do not use pin 53 if there is even the remote possibility of using Display/SD card
+#define MAX6675_SS_PIN             58
 //@@@
 
 //###IF_BLOCKS
@@ -317,3 +317,4 @@
 
 #endif // ULTRA_LCD
 //@@@
+

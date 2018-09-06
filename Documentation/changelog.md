@@ -6,7 +6,8 @@
 * Add Bézier Jerk Control
 * Add Safety Timer, after 30 minutes if not printing (SD or M530 S1) the heaters switch off.
 * Rewrite SD Restart for auto restart when power loss and return.
-* Add command gcode M569 for Stepper driver control: Dir, minimum pulse and maximum rate.
+* Add command gcode M569 for Stepper driver control: Dir, direction delay, minimum pulse and maximum rate.
+* Add Hysteresis in EEPROM
 * Fix and clear code
 
 ### Version 4.3.5 Stable
@@ -194,8 +195,8 @@
 * Add option for name firmware file Nextion
 
 ### Version 4.3.06_dev
-* Add Auto report temp width M155
-* Add new capabilities string width M115
+* Add Auto report temp with M155
+* Add new capabilities string with M115
 * Add M155 Set temperature auto-report interval
 * Add M320 Activate autolevel
 * Add M321 Deactivate autoleveling
@@ -208,8 +209,8 @@
 ### Version 4.3.05_dev
 * Add register in EEPROM Bilinear Bed Level
 * Add M355 Turn case lights on/off
-* Fix Error width 8bit and 2 or more Hotends
-* Upgrade Nextion width Filament Change
+* Fix Error with 8bit and 2 or more Hotends
+* Upgrade Nextion with Filament Change
 * New Fix
 
 ### Version 4.3.04_dev
@@ -266,7 +267,7 @@
 
 ### Version 4.2.82
 * Add DONDOLO_DUAL_MOTOR for DONDOLO bowden and dual extruder
-* Add reader TAG width MFRC522
+* Add reader TAG with MFRC522
 
 ### Version 4.2.81
 * Fix serial protocol for Repetier Host
@@ -346,7 +347,7 @@
 * Add support for Piggy Alligator board
 * Add Debug_info. Repetier button info for enabled or disabled, or M111 S2 for enabled and M111 S0 for disabled.
 * Improved Topography Auto Bed Level.
-* Add Dryrun ABL and verbose width command G29 D or G29 V(0-4).
+* Add Dryrun ABL and verbose with command G29 D or G29 V(0-4).
 * Improve Autoconfiguration for Delta printer.
 * Add support (test only) for NEXTION HMI LCD.
 * Improved firmare test dialog.
@@ -360,11 +361,11 @@
 ### Version 4.1.3
 * Improved support for Delta, SCARA, COREXY & COREXZ kinematics.
 * Improved stepper timer for high velocity driver and not.
-* Add calibrate surface width DELTA.
-* Improved serial comunication width most popular Host.
+* Add calibrate surface with DELTA.
+* Improved serial comunication with most popular Host.
 * Add Acceleration retraction for extruder.
 * Add EJerk for extruder.
-* Remove limit for virtual extruder to 4. Now width MKR4 or NPr2 is possible have infinite extruder...
+* Remove limit of maximum 4 virtual extruders. Now with MKR4 or NPr2 is possible to have infinite extruders...
 * Add M92 T* E (Set step per unit for any extruder).
 * Add M203 T* E (Set max feedrate for any extruder).
 * Add M204 T* R (Set acc retraction for any extruder).

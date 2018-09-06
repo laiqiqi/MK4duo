@@ -43,7 +43,7 @@ class TemperatureSensor {
             shB,
             shC;
 
-    #if HEATER_USES_AD595
+    #if ENABLED(SUPPORT_AD8495) || ENABLED(SUPPORT_AD595)
       float ad595_offset,
             ad595_gain;
     #endif
@@ -53,14 +53,12 @@ class TemperatureSensor {
     void CalcDerivedParameters();
     float getTemperature();
 
-  private: /** Private Function */
-
     #if ENABLED(SUPPORT_MAX6675)
-      int16_t read_max6675(const pin_t cs_pin);
+      int16_t read_max6675();
     #endif
 
     #if ENABLED(SUPPORT_MAX31855)
-      int16_t read_max31855(const pin_t cs_pin);
+      int16_t read_max31855();
     #endif
 
 };

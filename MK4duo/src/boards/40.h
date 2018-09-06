@@ -143,7 +143,7 @@
 #define SERVO3_PIN                  4
 
 //###MISC
-#define ORIG_PS_ON_PIN             NoPin
+#define ORIG_PS_ON_PIN             12
 #define ORIG_BEEPER_PIN            NoPin
 #define LED_PIN                    13
 #define SDPOWER_PIN                NoPin
@@ -159,7 +159,6 @@
 
 
 //###UNKNOWN_PINS
-#define PS_ON_PIN                   12
 #define MAX6675_SS_PIN              66
 //@@@
 
@@ -270,3 +269,4 @@
   #endif // NEWPANEL
 #endif // ULTRA_LCD
 //@@@
+

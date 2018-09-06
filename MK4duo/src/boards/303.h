@@ -3,11 +3,6 @@
 * Mini Rambo
 ****************************************************************************************/
 
-//###CHIP
-#if DISABLED(__AVR_ATmega2560__)
-  #error "Oops!  Make sure you have 'Rambo' selected from the 'Tools -> Boards' menu."
-#endif
-//@@@
 
 #define KNOWN_BOARD 1
 
@@ -214,3 +209,4 @@
 
 #endif // ULTRA_LCD
 //@@@
+

@@ -228,3 +228,17 @@
 #define EXP1_J5_8             40
 #define EXP1_J5_6             41
 //@@@
+
+//###MB_SETUP
+#define MB_SETUP                        \
+  OUT_WRITE(DAC0_SYNC_PIN, HIGH);       \
+  OUT_WRITE(DAC1_SYNC_PIN, HIGH);       \
+  OUT_WRITE(SPI_EEPROM1_CS, HIGH);      \
+  OUT_WRITE(SPI_EEPROM2_CS, HIGH);      \
+  OUT_WRITE(SPI_FLASH_CS, HIGH);        \
+  SET_INPUT(MOTOR_FAULT_PIN);           \
+  SET_INPUT(MOTOR_FAULT_PIGGY_PIN);     \
+  SET_INPUT(FTDI_COM_RESET_PIN);        \
+  SET_INPUT(ESP_WIFI_MODULE_RESET_PIN); \
+  OUT_WRITE(EXP1_OUT_ENABLE_PIN, HIGH)
+//@@@

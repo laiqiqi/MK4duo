@@ -78,7 +78,6 @@
 #include "control/m121.h"
 #include "control/m122.h"
 #include "control/m226.h"                 // Wait until a pin
-#include "control/m280.h"                 // Servo
 #include "control/m350_m351.h"            // Microstep
 #include "control/m355.h"                 // Set Case Light
 #include "control/m380_m381.h"            // Extruder Solenoid
@@ -105,8 +104,7 @@
 #include "feature/g27.h"
 #include "feature/g60.h"
 #include "feature/g61.h"
-#include "feature/m96_m97.h"
-#include "feature/m98_m99.h"
+#include "feature/m99.h"                  // Hysteresis feature
 #include "feature/m100.h"                 // Free Memory Watcher
 #include "feature/m125.h"
 #include "feature/m126_m129.h"            // Solenoid feature
@@ -115,7 +113,7 @@
 #include "feature/m600.h"                 // Advanced Pause change filament
 #include "feature/m603.h"                 // Configure filament change
 #include "feature/m701_m702.h"            // Load / Unload filament
-#include "feature/m911_m915.h"            // Set TMC2130 driver
+#include "feature/m911_m915.h"            // Set TRINAMIC driver
 #include "feature/m922.h"                 // TMC DEBUG
 
 // Geometry Commands
@@ -185,6 +183,10 @@
 
 // Rfid Commands
 #include "rfid/m522.h"                    // Rfid read and write
+
+// Servo Commands
+#include "servo/m280.h"                   // Servo move
+#include "servo/m281.h"                   // Servo Angles
 
 // Scara Commands
 #include "scara/m360_m364.h"

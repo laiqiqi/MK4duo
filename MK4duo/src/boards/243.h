@@ -158,6 +158,9 @@
 #define ORIG_LASER_PWM_PIN          6
 
 
+//###UNKNOWN_PINS
+#define MAX6675_SS_PIN             66
+//@@@
 
 //###IF_BLOCKS
 #if ENABLED(ULTRA_LCD)
@@ -400,7 +403,5 @@
   #endif // NEWPANEL
 
 #endif // ULTRA_LCD
-
-// SPI for Max6675 or Max31855 Thermocouple
-#define MAX6675_SS_PIN         66
 //@@@
+

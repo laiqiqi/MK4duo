@@ -128,6 +128,10 @@ void Printer::setup() {
 
   HAL::hwSetup();
 
+  #if ENABLED(MB_SETUP)
+    MB_SETUP;
+  #endif
+
   setup_pinout();
 
   #if HAS_POWER_SWITCH
@@ -143,14 +147,14 @@ void Printer::setup() {
   #endif
 
   // Init Serial for HOST
-  SERIAL_INIT(BAUDRATE);
+  MKSERIAL.begin(BAUDRATE);
+  HAL::delayMilliseconds(1000);
   SERIAL_L(START);
 
-  // Init TMC stepper drivers CS or Serial
-  #if ENABLED(HAVE_TMC2130)
+  #if HAVE_DRV(TMC2130)
     tmc_init_cs_pins();
   #endif
-  #if ENABLED(HAVE_TMC2208)
+  #if HAVE_DRV(TMC2208)
     tmc2208_serial_begin();
   #endif
 
@@ -178,13 +182,20 @@ void Printer::setup() {
   // Send "ok" after commands by default
   commands.setup();
 
+  lcd_init();
+  LCD_MESSAGEPGM(WELCOME_MSG);
+
+  #if ENABLED(SHOW_BOOTSCREEN)
+    #if ENABLED(DOGLCD) || ENABLED(ULTRA_LCD)
+      lcd_bootscreen(); // Show MK4duo boot screen
+    #endif
+  #endif
+
   #if HAS_SDSUPPORT
-    card.mount();
+    if (!card.isOK()) card.mount();
   #endif
 
   print_job_counter.init();
-
-  mechanics.init();
 
   // Init endstops
   endstops.init();
@@ -207,7 +218,7 @@ void Printer::setup() {
 
   stepper.init(); // Initialize stepper, this enables interrupts!
 
-  #if MB(ALLIGATOR) || MB(ALLIGATOR_V3)
+  #if MB(ALLIGATOR_R2) || MB(ALLIGATOR_R3)
     externaldac.begin();
     externaldac.set_driver_current();
   #endif
@@ -257,15 +268,6 @@ void Printer::setup() {
       SERIAL_EM("RFID CONNECT");
   #endif
 
-  lcd_init();
-  LCD_MESSAGEPGM(WELCOME_MSG);
-
-  #if ENABLED(SHOW_BOOTSCREEN)
-    #if ENABLED(DOGLCD) || ENABLED(ULTRA_LCD)
-      lcd_bootscreen(); // Show MK4duo boot screen
-    #endif
-  #endif
-
   #if ENABLED(COLOR_MIXING_EXTRUDER) && MIXING_VIRTUAL_TOOLS > 1
     mixing_tools_init();
   #endif
@@ -302,58 +304,63 @@ void Printer::setup() {
  */
 void Printer::loop() {
 
-  printer.keepalive(NotBusy);
+  for (;;) {
 
-  #if HAS_SDSUPPORT
+    printer.keepalive(NotBusy);
 
-    card.checkautostart();
+    #if HAS_SDSUPPORT
 
-    if (isAbortSDprinting()) {
-      setAbortSDprinting(false);
+      card.checkautostart();
 
-      #if HAS_SD_RESTART
-        // Save Job for restart
-        if (IS_SD_PRINTING) restart.save_data(true);
-      #endif
+      if (isAbortSDprinting()) {
+        setAbortSDprinting(false);
 
-      // Stop SD printing
-      card.stopSDPrint();
+        #if HAS_SD_RESTART
+          // Save Job for restart
+          if (IS_SD_PRINTING) restart.save_data(true);
+        #endif
 
-      // Clear all command in quee
-      commands.clear_queue();
+        // Stop SD printing
+        card.stopSDPrint();
 
-      // Stop all stepper
-      quickstop_stepper();
+        // Clear all command in quee
+        commands.clear_queue();
 
-      // Auto home
-      #if Z_HOME_DIR > 0
-        mechanics.home();
-      #else
-        mechanics.home(true, true, false);
-      #endif
+        // Stop printer job timer
+        print_job_counter.stop();
 
-      // Disabled Heaters and Fan
-      thermalManager.disable_all_heaters();
-      #if FAN_COUNT > 0
-        LOOP_FAN() fans[f].Speed = 0;
-      #endif
+        // Stop all stepper
+        quickstop_stepper();
 
-      // Stop printer job timer
-      print_job_counter.stop();
-    }
+        // Auto home
+        #if Z_HOME_DIR > 0
+          mechanics.home();
+        #else
+          mechanics.home(true, true, false);
+        #endif
 
-  #endif // HAS_SDSUPPORT
+        // Disabled Heaters and Fan
+        thermalManager.disable_all_heaters();
+        #if FAN_COUNT > 0
+          LOOP_FAN() fans[f].Speed = 0;
+        #endif
 
-  commands.get_available();
-  commands.advance_queue();
-  endstops.report_state();
-  idle();
+      }
+
+    #endif // HAS_SDSUPPORT
+
+    commands.get_available();
+    commands.advance_queue();
+    endstops.report_state();
+    idle();
+
+  }
 }
 
 void Printer::check_periodical_actions() {
 
-  static uint8_t  cycle_1000ms = 10,  // Event 1.0 Second
-                  cycle_2500ms = 25;  // Event 2.5 Second
+  static millis_t cycle_1s = 0;
+  const millis_t now = millis();
 
   // Control interrupt events
   handle_interrupt_events();
@@ -361,45 +368,40 @@ void Printer::check_periodical_actions() {
   // Tick timer job counter
   print_job_counter.tick();
 
-  // Event 100 Ms - 10Hz
-  if (HAL::execute_100ms) {
-    HAL::execute_100ms = false;
+  // Event 1.0 Second
+  if (ELAPSED(now, cycle_1s)) {
+
+    cycle_1s = now + 1000UL;
     planner.check_axes_activity();
-    thermalManager.spin();
 
-    // Event 1.0 Second
-    if (--cycle_1000ms == 0) {
-      cycle_1000ms = 10;
-      if (!isSuspendAutoreport() && isAutoreportTemp()) {
-        thermalManager.report_temperatures();
-        SERIAL_EOL();
-      }
-      #if HAS_SDSUPPORT
-        if (isAutoreportSD()) card.printStatus();
-      #endif
-      #if ENABLED(NEXTION)
-        nextion_draw_update();
-      #endif
-      if (planner.cleaning_buffer_flag) {
-        planner.cleaning_buffer_flag = false;
-        #if ENABLED(SD_FINISHED_STEPPERRELEASE) && ENABLED(SD_FINISHED_RELEASECOMMAND)
-          commands.enqueue_and_echo_P(PSTR(SD_FINISHED_RELEASECOMMAND));
-        #endif
-      }
+    if (!isSuspendAutoreport() && isAutoreportTemp()) {
+      thermalManager.report_temperatures();
+      SERIAL_EOL();
     }
 
-    // Event 2.5 Second
-    if (--cycle_2500ms == 0) {
-      cycle_2500ms = 25;
-      #if FAN_COUNT > 0
-        LOOP_FAN() fans[f].spin();
-      #endif
-      #if HAS_POWER_SWITCH
-        powerManager.spin();
+    #if HAS_SDSUPPORT
+      if (isAutoreportSD()) card.printStatus();
+    #endif
+
+    #if ENABLED(NEXTION)
+      nextion_draw_update();
+    #endif
+
+    if (planner.cleaning_buffer_flag) {
+      planner.cleaning_buffer_flag = false;
+      #if ENABLED(SD_FINISHED_STEPPERRELEASE) && ENABLED(SD_FINISHED_RELEASECOMMAND)
+        commands.enqueue_and_echo_P(PSTR(SD_FINISHED_RELEASECOMMAND));
       #endif
     }
+
+    #if FAN_COUNT > 0
+      LOOP_FAN() fans[f].spin();
+    #endif
+
+    #if HAS_POWER_SWITCH
+      powerManager.spin();
+    #endif
   }
-
 }
 
 void Printer::safe_delay(millis_t ms) {
@@ -573,6 +575,10 @@ void Printer::idle(const bool ignore_stepper_queue/*=false*/) {
     SERIAL_LMT(ER, MSG_KILL_INACTIVE_TIME, parser.command_ptr);
     kill(PSTR(MSG_KILLED));
   }
+
+  #if ENABLED(SUPPORT_MAX31855) || ENABLED(SUPPORT_MAX6675)
+    thermalManager.getTemperature_SPI();
+  #endif
 
   #if ENABLED(DHT_SENSOR)
     dhtsensor.spin();
@@ -869,9 +875,9 @@ void Printer::handle_safety_watch() {
 
   static watch_t safety_watch(30 * 60 * 1000UL); // Set 30 minutes
 
-  if (safety_watch.isRunning() && (IS_SD_PRINTING || print_job_counter.isRunning() || print_job_counter.isPaused() || !thermalManager.heaters_isON()))
+  if (safety_watch.isRunning() && (IS_SD_PRINTING || print_job_counter.isRunning() || print_job_counter.isPaused() || !thermalManager.heaters_isActive()))
     safety_watch.stop();
-  else if (!safety_watch.isRunning() && thermalManager.heaters_isON())
+  else if (!safety_watch.isRunning() && thermalManager.heaters_isActive())
     safety_watch.start();
   else if (safety_watch.isRunning() && safety_watch.elapsed()) {
     safety_watch.stop();
@@ -902,64 +908,28 @@ void Printer::suicide() {
 
 void Printer::setup_pinout() {
 
-  #if MB(ALLIGATOR) || MB(ALLIGATOR_V3)
-
-    // All SPI chip-select HIGH
-    OUT_WRITE(DAC0_SYNC_PIN, HIGH);
-    #if EXTRUDERS > 1
-      OUT_WRITE(DAC1_SYNC_PIN, HIGH);
-    #endif
-    OUT_WRITE(SPI_EEPROM1_CS, HIGH);
-    OUT_WRITE(SPI_EEPROM2_CS, HIGH);
-    OUT_WRITE(SPI_FLASH_CS, HIGH);
-    SET_INPUT(MOTOR_FAULT_PIN);
-    #if MB(ALLIGATOR_V3)
-      SET_INPUT(MOTOR_FAULT_PIGGY_PIN);
-      SET_INPUT(FTDI_COM_RESET_PIN);
-      SET_INPUT(ESP_WIFI_MODULE_RESET_PIN);
-      OUT_WRITE(EXP1_OUT_ENABLE_PIN, HIGH);
-    #elif MB(ALLIGATOR)
-      // Init Expansion Port Voltage logic Selector
-      OUT_WRITE(EXP_VOLTAGE_LEVEL_PIN, UI_VOLTAGE_LEVEL);
-    #endif
-
-    #if HAS_BUZZER
-      BUZZ(10,10);
-    #endif
-
-  #elif MB(ULTRATRONICS)
-
-    /* avoid floating pins */
-    OUT_WRITE(ORIG_FAN0_PIN, LOW);
-    OUT_WRITE(ORIG_FAN1_PIN, LOW);
-
-    OUT_WRITE(ORIG_HEATER_0_PIN, LOW);
-    OUT_WRITE(ORIG_HEATER_1_PIN, LOW);
-    OUT_WRITE(ORIG_HEATER_2_PIN, LOW);
-    OUT_WRITE(ORIG_HEATER_3_PIN, LOW);
-
-    OUT_WRITE(ENC424_SS_PIN, HIGH);
-
+  #if HAS_BUZZER
+    BUZZ(10,10);
   #endif
 
   #if PIN_EXISTS(SS)
     OUT_WRITE(SS_PIN, HIGH);
   #endif
 
-  #if HAS_MAX6675_SS
+  #if PIN_EXISTS(MAX6675_SS)
     OUT_WRITE(MAX6675_SS_PIN, HIGH);
   #endif
 
-  #if HAS_MAX31855_SS0
+  #if PIN_EXISTS(MAX31855_SS0)
     OUT_WRITE(MAX31855_SS0_PIN, HIGH);
   #endif
-  #if HAS_MAX31855_SS1
+  #if PIN_EXISTS(MAX31855_SS1)
     OUT_WRITE(MAX31855_SS1_PIN, HIGH);
   #endif
-  #if HAS_MAX31855_SS2
+  #if PIN_EXISTS(MAX31855_SS2)
     OUT_WRITE(MAX31855_SS2_PIN, HIGH);
   #endif
-  #if HAS_MAX31855_SS3
+  #if PIN_EXISTS(MAX31855_SS3)
     OUT_WRITE(MAX31855_SS3_PIN, HIGH);
   #endif
 

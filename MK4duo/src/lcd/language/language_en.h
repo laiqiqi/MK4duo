@@ -60,6 +60,12 @@
 #ifndef MSG_MAIN
   #define MSG_MAIN                            _UxGT("Main")
 #endif
+#ifndef MSG_ADVANCED_SETTINGS
+  #define MSG_ADVANCED_SETTINGS               _UxGT("Advanced Settings")
+#endif
+#ifndef MSG_CONFIGURATION
+  #define MSG_CONFIGURATION                   _UxGT("Configuration")
+#endif
 #ifndef MSG_AUTOSTART
   #define MSG_AUTOSTART                       _UxGT("Autostart")
 #endif
@@ -179,6 +185,18 @@
 #endif
 #ifndef MSG_MOVE_AXIS
   #define MSG_MOVE_AXIS                       _UxGT("Move axis")
+#endif
+#ifndef MSG_DXC_MENU
+  #define MSG_DXC_MENU                        _UxGT("DXC Mode")
+#endif
+#ifndef MSG_DXC_MODE_AUTOPARK
+  #define MSG_DXC_MODE_AUTOPARK               _UxGT("Auto-Park")
+#endif
+#ifndef MSG_DXC_MODE_DUPLICATE
+  #define MSG_DXC_MODE_DUPLICATE              _UxGT("Duplication")
+#endif
+#ifndef MSG_DXC_MODE_FULL_CTRL
+  #define MSG_DXC_MODE_FULL_CTRL              _UxGT("Full control")
 #endif
 #ifndef MSG_BED_LEVELING
   #define MSG_BED_LEVELING                    _UxGT("Bed Leveling")
@@ -918,7 +936,7 @@
   #define MSG_CHAMBER_DONE                    _UxGT("Chamber done.")
 #endif
 #ifndef MSG_COOLER_COOLING
-  #define MSG_COOLER_COOLING                  _UxGT("Cooler vooling.")
+  #define MSG_COOLER_COOLING                  _UxGT("Cooler cooling.")
 #endif
 #ifndef MSG_COOLER_DONE
   #define MSG_COOLER_DONE                     _UxGT("Cooler done.")

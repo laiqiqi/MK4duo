@@ -96,9 +96,13 @@ class Temperature {
     static void disable_all_heaters();
 
     /**
-     * Check if there are heaters on
+     * Check if there are heaters Active
      */
-    static bool heaters_isON();
+    static bool heaters_isActive();
+
+    #if ENABLED(SUPPORT_MAX6675) || ENABLED(SUPPORT_MAX31855)
+      static void getTemperature_SPI();
+    #endif
 
     #if HAS_FILAMENT_SENSOR
       static int8_t widthFil_to_size_ratio(); // Convert Filament Width (mm) to an extrusion ratio
@@ -153,7 +157,7 @@ class Temperature {
 
       typedef enum TRState { TRInactive, TRFirstHeating, TRStable, TRRunaway } TRstate;
 
-      static void thermal_runaway_protection(TRState* state, millis_t* timer, float temperature, float target_temperature, const uint8_t h, int period_seconds, int hysteresis_degc);
+      static void thermal_runaway_protection(TRState* state, millis_t* timer, const uint8_t h, int period_seconds, int hysteresis_degc);
 
       static TRState thermal_runaway_state_machine[HEATER_COUNT];
       static millis_t thermal_runaway_timer[HEATER_COUNT];

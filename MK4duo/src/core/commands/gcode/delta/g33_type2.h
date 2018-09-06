@@ -41,12 +41,18 @@
                     __C      = _BC + _7P_STEP,
                     _CA      = __C + _7P_STEP;
 
-  #define LOOP_CAL_PT(VAR, S, N) for (uint8_t VAR=S; VAR<=NPP; VAR+=N)
-  #define F_LOOP_CAL_PT(VAR, S, N) for (float VAR=S; VAR<NPP+0.9999; VAR+=N)
-  #define I_LOOP_CAL_PT(VAR, S, N) for (float VAR=S; VAR>CEN+0.9999; VAR-=N)
-  #define LOOP_CAL_ALL(VAR) LOOP_CAL_PT(VAR, CEN, 1)
-  #define LOOP_CAL_RAD(VAR) LOOP_CAL_PT(VAR, __A, _7P_STEP)
-  #define LOOP_CAL_ACT(VAR, _4P, _OP) LOOP_CAL_PT(VAR, _OP ? _AB : __A, _4P ? _4P_STEP : _7P_STEP)
+  #define LOOP_CAL_PT(VAR,S,N)      for(uint8_t VAR=S; VAR<=NPP; VAR+=N)
+  #define F_LOOP_CAL_PT(VAR,S,N)    for(float VAR=S; VAR<NPP+0.9999; VAR+=N)
+  #define I_LOOP_CAL_PT(VAR,S,N)    for(float VAR=S; VAR>CEN+0.9999; VAR-=N)
+  #define LOOP_CAL_ALL(VAR)         LOOP_CAL_PT(VAR, CEN, 1)
+  #define LOOP_CAL_RAD(VAR)         LOOP_CAL_PT(VAR, __A, _7P_STEP)
+  #define LOOP_CAL_ACT(VAR,_4P,_OP) LOOP_CAL_PT(VAR, _OP ? _AB : __A, _4P ? _4P_STEP : _7P_STEP)
+
+  void ac_home() {
+    endstops.setEnabled(true);
+    mechanics.home();
+    endstops.setNotHoming();
+  }
 
   static void Calibration_cleanup(
     #if HOTENDS > 1
@@ -128,7 +134,7 @@
           S2 += sq(z_pt[rad]);
           N++;
         }
-        return round(SQRT(S2 / N) * 1000.0) / 1000.0 + 0.00001;
+        return LROUND(SQRT(S2 / N) * 1000) / 1000 + 0.00001f;
       }
     }
     return 0.00001;
@@ -150,8 +156,8 @@
                 _7p_11_intermediates = probe_points == 9,
                 _7p_14_intermediates = probe_points == 10,
                 _7p_intermed_points  = probe_points >= 4,
-                _7p_6_centre         = probe_points >= 5 && probe_points <= 7,
-                _7p_9_centre         = probe_points >= 8;
+                _7p_6_center         = probe_points >= 5 && probe_points <= 7,
+                _7p_9_center         = probe_points >= 8;
 
     LOOP_CAL_ALL(rad) z_pt[rad] = 0.0;
 
@@ -163,8 +169,8 @@
       }
 
       if (_7p_calibration) {  // probe extra center points
-        const float start  = _7p_9_centre ? _CA + _7P_STEP / 3.0 : _7p_6_centre ? _CA : __C,
-                    steps  = _7p_9_centre ? _4P_STEP / 3.0 : _7p_6_centre ? _7P_STEP : _4P_STEP;
+        const float start  = _7p_9_center ? float(_CA) + _7P_STEP / 3.0 : _7p_6_center ? float(_CA) : float(__C),
+                    steps  = _7p_9_center ? _4P_STEP / 3.0 : _7p_6_center ? _7P_STEP : _4P_STEP;
         I_LOOP_CAL_PT(rad, start, steps) {
           const float a = RADIANS(210 + (360 / NPP) *  (rad - 1)),
                       r = mechanics.delta_probe_radius * 0.1;
@@ -187,8 +193,8 @@
                                 _4P_STEP;                                // .5r * 6 +  1c = 4
 
         bool zig_zag = true;
-        F_LOOP_CAL_PT(rad, start, _7p_9_centre ? steps * 3 : steps) {
-          const int8_t offset = _7p_9_centre ? 2 : 0;
+        F_LOOP_CAL_PT(rad, start, _7p_9_center ? steps * 3 : steps) {
+          const int8_t offset = _7p_9_center ? 2 : 0;
           for (int8_t circle = 0; circle <= offset; circle++) {
             const float a = RADIANS(210 + (360 / NPP) *  (rad - 1)),
                         r = mechanics.delta_probe_radius * (1 - 0.1 * (zig_zag ? offset - circle : circle)),
@@ -196,8 +202,8 @@
             const float z_temp = probe.check_pt(COS(a) * r, SIN(a) * r, stow_after_each ? PROBE_PT_STOW : PROBE_PT_RAISE, 0, false);
             if (isnan(z_temp)) return false;
             // split probe point to neighbouring calibration points
-            z_pt[uint8_t(round(rad - interpol + NPP - 1)) % NPP + 1] += z_temp * sq(COS(RADIANS(interpol * 90)));
-            z_pt[uint8_t(round(rad - interpol))           % NPP + 1] += z_temp * sq(SIN(RADIANS(interpol * 90)));
+            z_pt[uint8_t(LROUND(rad - interpol + NPP - 1)) % NPP + 1] += z_temp * sq(COS(RADIANS(interpol * 90)));
+            z_pt[uint8_t(LROUND(rad - interpol))           % NPP + 1] += z_temp * sq(SIN(RADIANS(interpol * 90)));
           }
           zig_zag = !zig_zag;
         }
@@ -381,7 +387,7 @@
                 _1p_calibration     = probe_points == 1,
                 _4p_calibration     = probe_points == 2,
                 _4p_opposite_points = _4p_calibration && !towers_set,
-                _7p_9_centre        = probe_points >= 8,
+                _7p_9_center        = probe_points >= 8,
                 _tower_results      = (_4p_calibration && towers_set) || probe_points >= 3,
                 _opposite_results   = (_4p_calibration && !towers_set) || probe_points >= 3,
                 _endstop_results    = probe_points != 1 && probe_points != 0,
@@ -445,7 +451,7 @@
 
     planner.synchronize();
     printer.setup_for_endstop_or_probe_move();
-    if (!_0p_calibration && !mechanics.home()) return;
+    if (!_0p_calibration) ac_home();
 
     // start iterations
     do {
@@ -496,7 +502,7 @@
         #define Z0(I)   ZP(0, I)
 
         const float cr_old = mechanics.delta_probe_radius;
-        if (_7p_9_centre) mechanics.delta_probe_radius *= 0.9;
+        if (_7p_9_center) mechanics.delta_probe_radius *= 0.9;
         h_factor = auto_tune_h();
         r_factor = auto_tune_r();
         a_factor = auto_tune_a();
@@ -556,9 +562,9 @@
 
         // Normalise angles to least squares
         if (_angle_results) {
-          float a_sum = 0.0;
+          float a_sum = 0;
           LOOP_XYZ(axis) a_sum += mechanics.delta_tower_angle_adj[axis];
-          LOOP_XYZ(axis) mechanics.delta_tower_angle_adj[axis] -= a_sum / 3.0;
+          LOOP_XYZ(axis) mechanics.delta_tower_angle_adj[axis] -= a_sum / 3;
         }
 
         // Adjust delta_height and endstops by the max amount
@@ -590,9 +596,9 @@
           char mess[21];
           strcpy_P(mess, PSTR("Calibration sd:"));
           if (zero_std_dev_min < 1)
-            sprintf_P(&mess[15], PSTR("0.%03i"), (int)round(zero_std_dev_min * 1000.0));
+            sprintf_P(&mess[15], PSTR("0.%03i"), (int)LROUND(zero_std_dev_min * 1000));
           else
-            sprintf_P(&mess[15], PSTR("%03i.x"), (int)round(zero_std_dev_min));
+            sprintf_P(&mess[15], PSTR("%03i.x"), (int)LROUND(zero_std_dev_min));
           lcd_setstatus(mess);
           Report_settings(_endstop_results, _angle_results);
           SERIAL_PS(save_message);
@@ -622,13 +628,13 @@
         strcpy_P(mess, enddryrun);
         strcpy_P(&mess[11], PSTR(" sd:"));
         if (zero_std_dev < 1)
-          sprintf_P(&mess[15], PSTR("0.%03i"), (int)round(zero_std_dev * 1000.0));
+          sprintf_P(&mess[15], PSTR("0.%03i"), (int)LROUND(zero_std_dev * 1000));
         else
-          sprintf_P(&mess[15], PSTR("%03i.x"), (int)round(zero_std_dev));
+          sprintf_P(&mess[15], PSTR("%03i.x"), (int)LROUND(zero_std_dev));
         lcd_setstatus(mess);
       }
 
-      if (!mechanics.home()) return;
+      ac_home();
 
     } while (((zero_std_dev < test_precision && iterations < 31) || iterations <= force_iterations) && zero_std_dev > calibration_precision);
 

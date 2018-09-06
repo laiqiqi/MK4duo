@@ -55,16 +55,17 @@ class Stepper {
 
     static uint16_t direction_flag; // Driver Stepper direction flag
 
-    static block_t* current_block;  // A pointer to the block currently being traced
-
     #if ENABLED(X_TWO_ENDSTOPS) || ENABLED(Y_TWO_ENDSTOPS) || ENABLED(Z_TWO_ENDSTOPS)
       static bool homing_dual_axis;
     #endif
 
     static uint8_t  minimum_pulse;
-    static uint32_t maximum_rate;
+    static uint32_t maximum_rate,
+                    direction_delay;
 
   private: /** Private Parameters */
+
+    static block_t* current_block;          // A pointer to the block currently being traced
 
     static uint8_t  last_direction_bits,    // The next stepping-bits to be output
                     axis_did_move;          // Last Movement in the given direction is not null, as computed when the last movement was fetched from planner
@@ -167,9 +168,19 @@ class Stepper {
     static void init();
 
     /**
+     * Initialize Factory parameters
+     */
+    static void factory_parameters();
+
+    /**
      * This is called by the interrupt service routine to execute steps.
      */
     static void Step();
+
+    /**
+     * Check if the given block is busy or not - Must not be called from ISR contexts
+     */
+    static bool is_block_busy(const block_t* const block);
 
     /**
      * Get the position of a stepper, in steps
@@ -185,7 +196,12 @@ class Stepper {
      * The stepper subsystem goes to sleep when it runs out of things to execute. Call this
      * to notify the subsystem that it is time to go to work.
      */
-    static void wake_up();
+    FORCE_INLINE static void wake_up() { ENABLE_STEPPER_INTERRUPT(); }
+
+    /**
+     * Set direction bits for all steppers
+     */
+    static void set_directions();
 
     /**
      * Enabled or Disable one or all stepper driver
@@ -322,18 +338,18 @@ class Stepper {
       static void microstep_readings();
     #endif
 
-    #if ENABLED(X_TWO_ENDSTOPS)
+    #if ENABLED(X_TWO_ENDSTOPS) || ENABLED(Y_TWO_ENDSTOPS) || ENABLED(Z_TWO_ENDSTOPS)
       FORCE_INLINE static void set_homing_dual_axis(const bool state) { homing_dual_axis = state; }
+    #endif
+    #if ENABLED(X_TWO_ENDSTOPS)
       FORCE_INLINE static void set_x_lock(const bool state) { locked_X_motor = state; }
       FORCE_INLINE static void set_x2_lock(const bool state) { locked_X2_motor = state; }
     #endif
     #if ENABLED(Y_TWO_ENDSTOPS)
-      FORCE_INLINE static void set_homing_dual_axis(const bool state) { homing_dual_axis = state; }
       FORCE_INLINE static void set_y_lock(const bool state) { locked_Y_motor = state; }
       FORCE_INLINE static void set_y2_lock(const bool state) { locked_Y2_motor = state; }
     #endif
     #if ENABLED(Z_TWO_ENDSTOPS)
-      FORCE_INLINE static void set_homing_dual_axis(const bool state) { homing_dual_axis = state; }
       FORCE_INLINE static void set_z_lock(const bool state) { locked_Z_motor = state; }
       FORCE_INLINE static void set_z2_lock(const bool state) { locked_Z2_motor = state; }
     #endif
@@ -385,11 +401,6 @@ class Stepper {
     static void stop_X_step();
     static void stop_Y_step();
     static void stop_Z_step();
-
-    /**
-     * Set direction bits for all steppers
-     */
-    static void set_directions();
 
     /**
      * Set X Y Z direction
