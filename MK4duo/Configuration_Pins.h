@@ -145,7 +145,7 @@
 #define HEATER_3_PIN        ORIG_HEATER_3_PIN
 #define HEATER_BED_PIN      ORIG_HEATER_BED_PIN
 #define HEATER_CHAMBER_PIN  ORIG_HEATER_CHAMBER_PIN
-#define HEATER_COOLER_PIN   NoPin
+#define HEATER_COOLER_PIN   ORIG_COOLER_PIN
 
 // TEMP pins
 #define TEMP_0_PIN          ORIG_TEMP_0_PIN
@@ -154,7 +154,7 @@
 #define TEMP_3_PIN          ORIG_TEMP_3_PIN
 #define TEMP_BED_PIN        ORIG_TEMP_BED_PIN
 #define TEMP_CHAMBER_PIN    ORIG_TEMP_CHAMBER_PIN
-#define TEMP_COOLER_PIN     NoPin
+#define TEMP_COOLER_PIN     ORIG_TEMP_COOLER_PIN
 
 // FAN pins
 #define FAN0_PIN            ORIG_FAN0_PIN
@@ -173,6 +173,15 @@
 //============================================================================
 
 //================================= FEATURE ==================================
+
+#if ENABLED(TACHOMETRIC)
+  #define TACHO0_PIN NoPin
+  #define TACHO1_PIN NoPin
+  #define TACHO2_PIN NoPin
+  #define TACHO3_PIN NoPin
+  #define TACHO4_PIN NoPin
+  #define TACHO5_PIN NoPin
+#endif
 
 #if ENABLED(MKR4)
   #define E0E1_CHOICE_PIN NoPin
@@ -236,7 +245,7 @@
 #endif
 
 #if ENABLED(CASE_LIGHT)
-  #define CASE_LIGHT_PIN          ORIG_CASE_LIGHT_PIN
+  #define CASE_LIGHT_PIN NoPin
 #endif
 
 #if ENABLED(DOOR_OPEN)
@@ -266,7 +275,7 @@
   #define DHT_DATA_PIN NoPin
 #endif
 
-#if ENABLED(HAVE_TMC2130) && ENABLED(SOFT_SPI_TMC2130)
+#if HAVE_DRV(TMC2130) && ENABLED(SOFT_SPI_TMC2130)
   #define SOFT_MOSI_PIN 51
   #define SOFT_MISO_PIN 50
   #define SOFT_SCK_PIN  52
